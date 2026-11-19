@@ -1,15 +1,5 @@
-"""
-maze_visualizer.py - turtle front-end for COMP3220 Assignment 2.
-
-Imports bfs/dfs/astar from maze_solver.py (no algorithm logic here); this file only
-draws the maze and animates the (path, visited_order) the solvers return.
-
-Run:  python maze_visualizer.py
-Keys: 1 BFS | 2 DFS | 3 A* | 4 Greedy | A run BFS->DFS->A* in a row (demo)
-      Up/Down speed | N new random maze | B benchmark maze | R re-run
-"""
-
 import turtle
+import tkinter as tk
 from maze_solver import bfs, dfs, astar, greedy_best_first
 from maze_generator import generate_maze
 
@@ -21,8 +11,13 @@ BENCHMARK = [
 ALGORITHMS = {"BFS": bfs, "DFS": dfs, "A*": astar, "Greedy": greedy_best_first}
 
 COLORS = {
-    "wall": "#2b2d42", "open": "#f8f9fa", "start": "#2ecc71", "goal": "#e63946",
-    "visited": "#8ecae6", "path": "#ffb703", "grid": "#c9ccd1",
+    "wall": "#000000",
+    "open": "#F8F3FF",
+    "start": "#65C9C0",
+    "goal": "#E879A8",
+    "visited": "#93C5FD",
+    "path": "#F59CC5",
+    "grid": "#D6C6E8",
 }
 
 AREA = 600                       # maze is scaled to fit an AREA x AREA pixel square
