@@ -24,32 +24,28 @@ Conventions
 from collections import deque
 import heapq
 
-# Fixed neighbour order (row delta, col delta): up, right, down, left
+# fixes neighbour order (row delta, col delta): up, right, down, left
 DIRECTIONS = ((-1, 0), (0, 1), (1, 0), (0, -1))
 STEP_COST = 1
 
-
-# ----------------------------------------------------------------- helpers
+# calculates the manhattan distance between two positions
 def manhattan_distance(a, b):
-    """Admissible + consistent heuristic for 4-directional, unit-cost grids."""
     return abs(a[0] - b[0]) + abs(a[1] - b[1])
 
-
+# checks whether a position is inside the maze and is NOT a wall
 def _is_open(maze, pos):
     r, c = pos
     return 0 <= r < len(maze) and 0 <= c < len(maze[r]) and str(maze[r][c]) != '1'
 
-
+# finds all valid neighbouring cells in the fixed direction order
 def _neighbors(maze, pos):
-    """Yield open, in-bounds 4-neighbours of pos in the fixed DIRECTIONS order."""
     for dr, dc in DIRECTIONS:
         nxt = (pos[0] + dr, pos[1] + dc)
         if _is_open(maze, nxt):
             yield nxt
 
-
+# rebuilds the path from the goal back to the starting position
 def _reconstruct(parent, goal):
-    """Walk the parent links back from goal to start and reverse."""
     path = []
     node = goal
     while node is not None:
@@ -58,49 +54,50 @@ def _reconstruct(parent, goal):
     path.reverse()
     return path
 
-
+# calculates the search statistics and returns the results
 def _package(path, visited_order):
-    """Build the (path, visited_order, stats) return tuple."""
     moves = max(len(path) - 1, 0)
     stats = {
         'nodes_expanded': len(visited_order),
-        'path_length': len(path),            # cells, start and goal inclusive
-        'path_cost': moves * STEP_COST,      # sum of edge costs
+        'path_length': len(path),           # cells, start and goal inclusive
+        'path_cost': moves * STEP_COST,     # sum of edge costs
     }
     return path, visited_order, stats
 
-
+# checks whether the starting position or goal is invalid
 def _invalid(maze, start, goal):
-    """True if start/goal are outside the maze or on a wall."""
     return not (_is_open(maze, start) and _is_open(maze, goal))
 
+# BFS
 
-# --------------------------------------------------------------------- BFS
+# searches the maze using a first-in, first-out queue to find the shortest path
 def bfs(maze, start, goal):
     """Breadth-first search (FIFO queue). Shortest path in number of steps."""
     start, goal = tuple(start), tuple(goal)
     if _invalid(maze, start, goal):
         return _package([], [])
 
-    parent = {start: None}          # doubles as the "seen" set
+    parent = {start: None}          # records visited cells and their parents
     queue = deque([start])
     visited_order = []
 
     while queue:
         node = queue.popleft()
-        visited_order.append(node)  # expansion
+        visited_order.append(node)  # records the expanded node
         if node == goal:
             return _package(_reconstruct(parent, goal), visited_order)
         for nxt in _neighbors(maze, node):
-            if nxt not in parent:   # mark when enqueued -> no duplicates
+            if nxt not in parent:   # prevents adding the same cell more than once
                 parent[nxt] = node
                 queue.append(nxt)
     return _package([], visited_order)
 
 
-# --------------------------------------------------------------------- DFS
+# DFS
+
+# searches the maze using a last-in, first-out stack to find a valid path
 def dfs(maze, start, goal):
-    """Iterative depth-first search (LIFO stack). Valid path, NOT necessarily shortest."""
+    # iterative depth-first search (LIFO stack). Valid path, noy necessarily shortest
     start, goal = tuple(start), tuple(goal)
     if _invalid(maze, start, goal):
         return _package([], [])
@@ -111,55 +108,66 @@ def dfs(maze, start, goal):
 
     while stack:
         node, par = stack.pop()
-        if node in parent:          # already expanded via another route
+        if node in parent:          # skips cells that have already been expanded
             continue
         parent[node] = par
         visited_order.append(node)
         if node == goal:
             return _package(_reconstruct(parent, goal), visited_order)
-        # push reversed so the FIRST direction in DIRECTIONS is explored first
+        # reverses the neighbours so the first direction is explored first
         for nxt in reversed(list(_neighbors(maze, node))):
             if nxt not in parent:
                 stack.append((nxt, node))
     return _package([], visited_order)
 
 
-# ------------------------------------------------------------------- A*
+# A*
+
+# searches the maze using movement cost and heuristic distance to guide the search
+# A* search with f(n) = g(n) + h(n)
+# optimal when h is admissible
 def astar(maze, start, goal, heuristic=manhattan_distance):
-    """A* search with f(n) = g(n) + h(n). Optimal when h is admissible."""
+    
     start, goal = tuple(start), tuple(goal)
     if _invalid(maze, start, goal):
         return _package([], [])
 
     g = {start: 0}
     parent = {start: None}
-    counter = 0                     # tie-breaker so the heap never compares tuples of nodes
+    counter = 0                     # prevents the heap from comparing nodes when priorities tie
     h0 = heuristic(start, goal)
-    heap = [(h0, h0, counter, start, 0)]   # (f, h, counter, node, g at push time)
+    heap = [(h0, h0, counter, start, 0)]   # stores priority, heuristic, node and movement cost
     visited_order = []
 
     while heap:
         _, _, _, node, g_node = heapq.heappop(heap)
-        if g_node > g[node]:        # stale entry (a cheaper route was found later)
+        
+        if g_node > g[node]:        # skips outdated entries with higher movement costs
             continue
+        
         visited_order.append(node)
+        
         if node == goal:
             return _package(_reconstruct(parent, goal), visited_order)
+        
         for nxt in _neighbors(maze, node):
             new_g = g_node + STEP_COST
-            if nxt not in g or new_g < g[nxt]:
+            
+            if nxt not in g or new_g < g[nxt]:  # updates the cell if a cheaper path is found
                 g[nxt] = new_g
                 parent[nxt] = node
                 counter += 1
                 h = heuristic(nxt, goal)
                 heapq.heappush(heap, (new_g + h, h, counter, nxt, new_g))
+    
     return _package([], visited_order)
 
-
-# ------------------------------------- extra algorithm (creative enhancement)
+# searches the maze by prioritising cells closest to the goal using a heuristic
+# greedy best-first: orders by h(n) only
+# fast but NOT guaranteed optimal
 def greedy_best_first(maze, start, goal, heuristic=manhattan_distance):
-    """Greedy best-first: orders by h(n) only. Fast but NOT guaranteed optimal."""
     start, goal = tuple(start), tuple(goal)
+    
     if _invalid(maze, start, goal):
         return _package([], [])
 
@@ -170,15 +178,20 @@ def greedy_best_first(maze, start, goal, heuristic=manhattan_distance):
 
     while heap:
         _, _, node = heapq.heappop(heap)
-        if node in expanded:
+        
+        if node in expanded:    # skips cells that have already been expanded
             continue
+        
         expanded.add(node)
         visited_order.append(node)
+        
         if node == goal:
             return _package(_reconstruct(parent, goal), visited_order)
+        
         for nxt in _neighbors(maze, node):
-            if nxt not in parent:
+            if nxt not in parent:   # prevents recording multiple parents for the same cell
                 parent[nxt] = node
                 counter += 1
                 heapq.heappush(heap, (heuristic(nxt, goal), counter, nxt))
+    
     return _package([], visited_order)

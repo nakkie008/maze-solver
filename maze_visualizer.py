@@ -20,32 +20,37 @@ COLORS = {
     "grid": "#D6C6E8",
 }
 
-AREA = 600                       # maze is scaled to fit an AREA x AREA pixel square
-# (delay in ms between frames, nodes drawn per frame); index = speed level
+# maze is scaled to fit an AREA x AREA pixel square
+AREA = 600                       
+
+# index = speed level; Delay in ms between frames, nodes drawn per frame
 SPEEDS = [(200, 1), (100, 1), (50, 1), (25, 1), (15, 2), (10, 4), (10, 10)]
 
-
+# turns the string benchmark into (int grid, start, goal)
 def parse_maze(rows):
-    """Turn the string benchmark into (int grid, start, goal)."""
     grid, start, goal = [], None, None
+    
     for r, row in enumerate(rows):
         line = []
+        
         for c, ch in enumerate(row):
             if ch == "S":
                 start = (r, c)
             elif ch == "G":
                 goal = (r, c)
+            
             line.append(1 if ch == "1" else 0)
+        
         grid.append(line)
+    
     return grid, start, goal
-
 
 class MazeApp:
     def __init__(self):
         self.screen = turtle.Screen()
         self.screen.setup(720, 780)
         self.screen.title("COMP3220 Maze Solver - BFS / DFS / A*")
-        self.screen.tracer(0)                    # we call update() ourselves (fast)
+        self.screen.tracer(0)
 
         self.painter = turtle.Turtle(visible=False)
         self.painter.shape("square")
@@ -53,21 +58,21 @@ class MazeApp:
         self.writer = turtle.Turtle(visible=False)
         self.writer.penup()
 
-        self.speed = 2                           # index into SPEEDS
-        self.token = 0                           # bumping this cancels a running animation
-        self.queue = []                          # algorithms still to run in demo mode
+        self.speed = 2     # index into SPEEDS
+        self.token = 0     # bumping this cancels a running animation
+        self.queue = []    # algorithms still to run in demo mode
         self.algo = "BFS"
         self.load_maze(*parse_maze(BENCHMARK), label="Benchmark maze")
         self.draw_controls()
         self.bind_keys()
 
-    # ------------------------------------------------------------ maze setup
+    # --- MAZE SETUP ---
     def load_maze(self, grid, start, goal, label):
         self.grid, self.start, self.goal, self.label = grid, start, goal, label
         rows, cols = len(grid), len(grid[0])
         self.cell = min(AREA / cols, AREA / rows)
-        self.x0 = -cols * self.cell / 2          # left edge
-        self.y0 = AREA / 2 - 10                  # top edge
+        self.x0 = -cols * self.cell / 2    # left edge
+        self.y0 = AREA / 2 - 10            # top edge
         self.painter.shapesize(self.cell / 20, self.cell / 20, 1)
         self.draw_maze()
 
@@ -83,14 +88,16 @@ class MazeApp:
 
     def draw_maze(self):
         self.painter.clearstamps()
+        
         for r, row in enumerate(self.grid):
             for c, cell in enumerate(row):
                 self.stamp_cell((r, c), COLORS["wall"] if cell == 1 else COLORS["open"])
+        
         self.stamp_cell(self.start, COLORS["start"])
         self.stamp_cell(self.goal, COLORS["goal"])
         self.screen.update()
 
-    # ------------------------------------------------------------------ text
+    # --- TEXT ---
     def status(self, text):
         self.writer.clear()
         self.writer.goto(0, AREA / 2 + 15)
@@ -104,14 +111,14 @@ class MazeApp:
         ctrl.write("1 BFS   2 DFS   3 A*   4 Greedy   A all-three demo   "
                    "Up/Down speed   N new maze   B benchmark   R rerun",
                    align="center", font=("Arial", 10, "normal"))
-        # legend
+        # key/legend
         ctrl.goto(0, -AREA / 2 - 70)
         ctrl.write("green = start   red = goal   blue = visited   yellow = final path",
                    align="center", font=("Arial", 10, "normal"))
 
-    # ------------------------------------------------------------- animation
+    # --- ANIMATION ---
+    # runs the solver (instantly, headless) then animate what it returned
     def run(self, name):
-        """Run the solver (instantly, headless) then animate what it returned."""
         self.token += 1
         token = self.token
         self.algo = name
@@ -122,14 +129,19 @@ class MazeApp:
         self.animate_visited(token, header, path, visited, stats, 0)
 
     def animate_visited(self, token, header, path, visited, stats, i):
-        if token != self.token:                  # a newer run/keypress replaced us
+        if token != self.token:      # a newer run/keypress replaced us
             return
+        
         delay, batch = SPEEDS[self.speed]
+        
         for pos in visited[i:i + batch]:
             if pos not in (self.start, self.goal):
                 self.stamp_cell(pos, COLORS["visited"])
+        
         self.screen.update()
+        
         i += batch
+        
         if i < len(visited):
             self.screen.ontimer(
                 lambda: self.animate_visited(token, header, path, visited, stats, i), delay)
@@ -140,14 +152,19 @@ class MazeApp:
     def animate_path(self, token, header, path, stats, i):
         if token != self.token:
             return
+        
         if not path:
             self.status(f"{header}: NO PATH (expanded {stats['nodes_expanded']})")
             return self.finish(token)
+        
         delay, _ = SPEEDS[self.speed]
         pos = path[i]
+        
         if pos not in (self.start, self.goal):
             self.stamp_cell(pos, COLORS["path"])
+        
         self.screen.update()
+       
         if i + 1 < len(path):
             self.screen.ontimer(
                 lambda: self.animate_path(token, header, path, stats, i + 1), max(delay, 40))
@@ -157,12 +174,12 @@ class MazeApp:
             self.finish(token)
 
     def finish(self, token):
-        """In demo mode, pause then start the next algorithm in the queue."""
+        # in demo mode, pause then start the next algorithm in the queue
         if self.queue and token == self.token:
             nxt = self.queue.pop(0)
             self.screen.ontimer(lambda: self.token == token and self.run(nxt), 1800)
 
-    # ------------------------------------------------------------ user input
+    # --- USER INPUT ---
     def bind_keys(self):
         for key, name in (("1", "BFS"), ("2", "DFS"), ("3", "A*"), ("4", "Greedy")):
             self.screen.onkey(lambda n=name: self.manual(n), key)
@@ -200,7 +217,6 @@ class MazeApp:
 
     def slower(self):
         self.speed = max(self.speed - 1, 0)
-
 
 if __name__ == "__main__":
     app = MazeApp()
